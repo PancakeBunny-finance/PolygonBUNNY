@@ -391,6 +391,8 @@ contract VaultQuickBunnyETH is VaultController, IStrategy {
             shares = (_amount.mul(totalShares)).div(_pool);
         }
 
+        _bunnyChef.updateRewardsOf(address(this));
+
         totalShares = totalShares.add(shares);
         _shares[_to] = _shares[_to].add(shares);
         _principal[_to] = _principal[_to].add(_amount);
