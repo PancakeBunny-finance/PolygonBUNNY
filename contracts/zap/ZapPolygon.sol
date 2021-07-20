@@ -100,7 +100,11 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
         return !notFlip[_address];
     }
 
-    function routePair(address _address) external view returns(address) {
+    function covers(address _token) public view override returns (bool) {
+        return notFlip[_token];
+    }
+
+    function routePair(address _address) external view returns (address) {
         return routePairAddresses[_address];
     }
 
@@ -236,25 +240,25 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
 
         address[] memory path;
         if (intermediate != address(0) && (_from == WMATIC || _to == WMATIC)) {
-            // [BTC, ETH, USDC] or [USDC, ETH, BTC]
+            // [WMATIC, QUICK, X] or [X, QUICK, WMATIC]
             path = new address[](3);
             path[0] = _from;
             path[1] = intermediate;
             path[2] = _to;
         } else if (intermediate != address(0) && (_from == intermediate || _to == intermediate)) {
-            // [VAI, BUSD] or [BUSD, VAI]
+            // [BTC, ETH] or [ETH, BTC]
             path = new address[](2);
             path[0] = _from;
             path[1] = _to;
         } else if (intermediate != address(0) && routePairAddresses[_from] == routePairAddresses[_to]) {
-            // [VAI, DAI] or [VAI, USDC]
+            // [BTC, ETH, DAI] or [DAI, ETH, BTC]
             path = new address[](3);
             path[0] = _from;
             path[1] = intermediate;
             path[2] = _to;
         } else if (routePairAddresses[_from] != address(0) && routePairAddresses[_to] != address(0) && routePairAddresses[_from] != routePairAddresses[_to]) {
             // routePairAddresses[xToken] = xRoute
-            // [VAI, BUSD, WMATIC, xRoute, xToken]
+            // [X, BTC, ETH, USDC, Y]
             path = new address[](5);
             path[0] = _from;
             path[1] = routePairAddresses[_from];
@@ -262,26 +266,26 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
             path[3] = routePairAddresses[_to];
             path[4] = _to;
         } else if (intermediate != address(0) && routePairAddresses[_from] != address(0)) {
-            // [VAI, BUSD, WMATIC, BUNNY]
+            // [BTC, ETH, WMATIC, QUICK]
             path = new address[](4);
             path[0] = _from;
             path[1] = intermediate;
             path[2] = WMATIC;
             path[3] = _to;
         } else if (intermediate != address(0) && routePairAddresses[_to] != address(0)) {
-            // [BUNNY, WMATIC, BUSD, VAI]
+            // [QUICK, WMATIC, ETH, BTC]
             path = new address[](4);
             path[0] = _from;
             path[1] = WMATIC;
             path[2] = intermediate;
             path[3] = _to;
         } else if (_from == WMATIC || _to == WMATIC) {
-            // [WMATIC, BUNNY] or [BUNNY, WMATIC]
+            // [WMATIC, QUICK] or [QUICK, WMATIC]
             path = new address[](2);
             path[0] = _from;
             path[1] = _to;
         } else {
-            // [USDT, BUNNY] or [BUNNY, USDT]
+            // [QUICK, WMATIC, X] or [X, WMATIC, QUICK]
             path = new address[](3);
             path[0] = _from;
             path[1] = WMATIC;
