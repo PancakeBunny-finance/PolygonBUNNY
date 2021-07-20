@@ -41,6 +41,7 @@ import "../../interfaces/IPancakeFactory.sol";
 import "../../interfaces/AggregatorV3Interface.sol";
 import "../../interfaces/IPriceCalculator.sol";
 import "../../library/HomoraMath.sol";
+import "../../interfaces/IZap.sol";
 
 contract PriceCalculator is IPriceCalculator, OwnableUpgradeable {
     using SafeMath for uint;
@@ -55,8 +56,14 @@ contract PriceCalculator is IPriceCalculator, OwnableUpgradeable {
     address private constant USDC = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
     address private constant BTC = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;
     address private constant DAI = 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063;
+    address private constant SUSHI = 0x0b3F868E0BE5597D5DB7fEB59E1CADBb0fdDa50a;
+    address private constant LINK = 0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39;
+    address private constant IBBTC = 0x4EaC4c4e9050464067D673102F8E24b2FccEB350;
+    address private constant FRAX = 0x104592a158490a9228070E0A8e5343B499e125D0;
 
     IPancakeFactory private constant factory = IPancakeFactory(0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32);
+    IPancakeFactory private constant sushiFactory = IPancakeFactory(0xc35DADB65012eC5796536bD9864eD8773aBc74C4);
+    IZap private constant zapPolygon = IZap(0x663462430834E220851a3E981D0E1199501b84F6);
 
     /* ========== STATE VARIABLES ========== */
 
@@ -77,6 +84,8 @@ contract PriceCalculator is IPriceCalculator, OwnableUpgradeable {
         setPairToken(USDT, ETH);
         setPairToken(DAI, ETH);
         setPairToken(BUNNY, ETH);
+        setPairToken(IBBTC, BTC);
+        setPairToken(FRAX, USDC);
     }
 
     /* ========== MODIFIERS ========== */
@@ -141,7 +150,8 @@ contract PriceCalculator is IPriceCalculator, OwnableUpgradeable {
         } else if (asset == AAVE) {
             (, int price, , ,) = AggregatorV3Interface(tokenFeeds[AAVE]).latestRoundData();
             return _oracleValueOf(ETH, uint(price));
-        } else if (keccak256(abi.encodePacked(IPancakePair(asset).symbol())) == keccak256("UNI-V2")) {
+        } else if (keccak256(abi.encodePacked(IPancakePair(asset).symbol())) == keccak256("UNI-V2") ||
+            keccak256(abi.encodePacked(IPancakePair(asset).symbol())) == keccak256("SLP")) {
             return _getPairPrice(asset, amount);
         } else {
             return _oracleValueOf(asset, amount);
@@ -160,7 +170,8 @@ contract PriceCalculator is IPriceCalculator, OwnableUpgradeable {
             valueInUSD = amount.mul(priceOfMATIC()).div(1e18);
             valueInETH = valueInUSD.mul(1e18).div(priceOfETH());
         }
-        else if (keccak256(abi.encodePacked(IPancakePair(asset).symbol())) == keccak256("UNI-V2")) {
+        else if (keccak256(abi.encodePacked(IPancakePair(asset).symbol())) == keccak256("UNI-V2") ||
+            keccak256(abi.encodePacked(IPancakePair(asset).symbol())) == keccak256("SLP")) {
             if (IPancakePair(asset).totalSupply() == 0) return (0, 0);
 
             (uint reserve0, uint reserve1,) = IPancakePair(asset).getReserves();
@@ -174,8 +185,10 @@ contract PriceCalculator is IPriceCalculator, OwnableUpgradeable {
                 (uint priceInETH,) = valueOfAsset(IPancakePair(asset).token0(), 1e18);
                 if (priceInETH == 0) {
                     (priceInETH,) = valueOfAsset(IPancakePair(asset).token1(), 1e18);
+                    reserve1 = reserve1.mul(10 ** uint(uint8(18) - IBEP20(IPancakePair(asset).token1()).decimals()));
                     valueInETH = amount.mul(reserve1).mul(2).mul(priceInETH).div(1e18).div(IPancakePair(asset).totalSupply());
                 } else {
+                    reserve0 = reserve0.mul(10 ** uint(uint8(18) - IBEP20(IPancakePair(asset).token0()).decimals()));
                     valueInETH = amount.mul(reserve0).mul(2).mul(priceInETH).div(1e18).div(IPancakePair(asset).totalSupply());
                 }
                 valueInUSD = valueInETH.mul(priceOfETH()).div(1e18);
@@ -184,13 +197,26 @@ contract PriceCalculator is IPriceCalculator, OwnableUpgradeable {
         }
         else {
             address pairToken = pairTokens[asset] == address(0) ? WMATIC : pairTokens[asset];
-            address pair = factory.getPair(asset, pairToken);
+
+            address pair = zapPolygon.covers(asset) ? factory.getPair(asset, pairToken) : sushiFactory.getPair(asset, pairToken);
+            address token0 = IPancakePair(pair).token0();
+            address token1 = IPancakePair(pair).token1();
+
             if (IBEP20(asset).balanceOf(pair) == 0) return (0, 0);
 
             (uint reserve0, uint reserve1,) = IPancakePair(pair).getReserves();
-            if (IPancakePair(pair).token0() == pairToken) {
+
+            if (IBEP20(token0).decimals() < uint8(18)){
+                reserve0 = reserve0.mul(10 ** uint(uint8(18) - IBEP20(token0).decimals()));
+            }
+
+            if (IBEP20(token1).decimals() < uint8(18)) {
+                reserve1 = reserve1.mul(10 ** uint(uint8(18) - IBEP20(token1).decimals()));
+            }
+
+            if (token0 == pairToken) {
                 valueInETH = reserve0.mul(amount).div(reserve1);
-            } else if (IPancakePair(pair).token1() == pairToken) {
+            } else if (token1 == pairToken) {
                 valueInETH = reserve1.mul(amount).div(reserve0);
             } else {
                 return (0, 0);
@@ -200,7 +226,9 @@ contract PriceCalculator is IPriceCalculator, OwnableUpgradeable {
                 (uint pairValueInETH,) = valueOfAsset(pairToken, 1e18);
                 valueInETH = valueInETH.mul(pairValueInETH).div(1e18);
             }
+
             valueInUSD = valueInETH.mul(priceOfETH()).div(1e18);
+
         }
     }
 
