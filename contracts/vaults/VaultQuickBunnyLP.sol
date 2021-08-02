@@ -31,12 +31,13 @@ pragma experimental ABIEncoderV2;
 * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 */
 
 import "@pancakeswap/pancake-swap-lib/contracts/token/BEP20/SafeBEP20.sol";
 import "@openzeppelin/contracts/math/Math.sol";
 
-import {PoolConstant} from "../library/PoolConstant.sol";
+import { PoolConstant } from "../library/PoolConstant.sol";
 import "../interfaces/IPancakePair.sol";
 import "../interfaces/IPancakeFactory.sol";
 import "../interfaces/IStrategy.sol";
@@ -49,11 +50,11 @@ import "./VaultController.sol";
 
 contract VaultQuickBunnyLP is VaultController, IStrategy {
     using SafeBEP20 for IBEP20;
-    using SafeMath for uint256;
+    using SafeMath for uint;
 
     /* ========== CONSTANTS ============= */
 
-    address private constant BUNNY = 0x4C16f69302CcB511c5Fac682c7626B9eF0Dc126a;      // polyBUNNY
+    address private constant BUNNY = 0x4C16f69302CcB511c5Fac682c7626B9eF0Dc126a; // polyBUNNY
 
     IBEP20 private constant QUICK = IBEP20(0x831753DD7087CaC61aB5644b308642cc1c33Dc13);
     IZap public constant zap = IZap(0x663462430834E220851a3E981D0E1199501b84F6);
@@ -71,7 +72,7 @@ contract VaultQuickBunnyLP is VaultController, IStrategy {
 
     IQuickStakingRewards private qVault;
 
-    uint public override pid;    // unused
+    uint public override pid; // unused
 
     /* ========== EVENTS ========== */
 
@@ -83,8 +84,7 @@ contract VaultQuickBunnyLP is VaultController, IStrategy {
     function initialize(address token) external initializer {
         __VaultController_init(IBEP20(token));
 
-        QUICK.safeApprove(address(zap), uint(- 1));
-
+        QUICK.safeApprove(address(zap), uint(-1));
     }
 
     /* ========== RESTRICTED FUNCTIONS ========== */
@@ -101,7 +101,7 @@ contract VaultQuickBunnyLP is VaultController, IStrategy {
     function setQuickVault(address _qVault) public onlyOwner {
         require(address(qVault) == address(0), "VaultQuickBunnyLP: qVault already set");
         qVault = IQuickStakingRewards(_qVault);
-        _stakingToken.safeApprove(_qVault, uint(- 1));
+        _stakingToken.safeApprove(_qVault, uint(-1));
 
         qVault.stake(totalBalance);
         delete totalBalance;
@@ -227,31 +227,8 @@ contract VaultQuickBunnyLP is VaultController, IStrategy {
         emit Harvested(harvested);
     }
 
-    function _harvest() private returns (uint) {
-        if (address(qVault) == address(0)) {
-            return 0;
-        } else {
-            uint before = QUICK.balanceOf(address(this));
-            qVault.getReward();
-            return QUICK.balanceOf(address(this)).sub(before);
-        }
-    }
-
-    function withdraw(uint shares) external override onlyWhitelisted {
-        uint amount = balance().mul(shares).div(totalShares);
-
-        _bunnyChef.notifyWithdrawn(msg.sender, shares);
-        totalShares = totalShares.sub(shares);
-        _shares[msg.sender] = _shares[msg.sender].sub(shares);
-
-        amount = _withdrawTokenWithCorrection(amount);
-
-        if (address(qVault) == address(0)) {
-            totalBalance = totalBalance.sub(amount);
-        }
-
-        _stakingToken.safeTransfer(msg.sender, amount);
-        emit Withdrawn(msg.sender, amount, 0);
+    function withdraw(uint) external override onlyWhitelisted {
+        revert("N/A");
     }
 
     // @dev underlying only + withdrawal fee + no perf fee
@@ -356,6 +333,16 @@ contract VaultQuickBunnyLP is VaultController, IStrategy {
             uint before = _stakingToken.balanceOf(address(this));
             qVault.withdraw(amount);
             return _stakingToken.balanceOf(address(this)).sub(before);
+        }
+    }
+
+    function _harvest() private returns (uint) {
+        if (address(qVault) == address(0)) {
+            return 0;
+        } else {
+            uint before = QUICK.balanceOf(address(this));
+            qVault.getReward();
+            return QUICK.balanceOf(address(this)).sub(before);
         }
     }
 
