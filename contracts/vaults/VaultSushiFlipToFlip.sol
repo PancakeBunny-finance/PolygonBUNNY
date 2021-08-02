@@ -31,12 +31,13 @@ pragma experimental ABIEncoderV2;
 * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 */
 
 import "@pancakeswap/pancake-swap-lib/contracts/token/BEP20/SafeBEP20.sol";
 import "@openzeppelin/contracts/math/Math.sol";
 
-import {PoolConstant} from "../library/PoolConstant.sol";
+import { PoolConstant } from "../library/PoolConstant.sol";
 import "../interfaces/IUniswapV2Pair.sol";
 import "../interfaces/IUniswapV2Factory.sol";
 import "../interfaces/IStrategy.sol";
@@ -47,7 +48,7 @@ import "./VaultController.sol";
 
 contract VaultSushiFlipToFlip is VaultController, IStrategy {
     using SafeBEP20 for IBEP20;
-    using SafeMath for uint256;
+    using SafeMath for uint;
 
     /* ========== CONSTANTS ============= */
 
@@ -63,10 +64,13 @@ contract VaultSushiFlipToFlip is VaultController, IStrategy {
 
     uint public override pid;
 
+    address private _token0; // unused
+    address private _token1; // unused
+
     uint public totalShares;
-    mapping (address => uint) private _shares;
-    mapping (address => uint) private _principal;
-    mapping (address => uint) private _depositedAt;
+    mapping(address => uint) private _shares;
+    mapping(address => uint) private _principal;
+    mapping(address => uint) private _depositedAt;
 
     uint public sushiHarvested;
     uint public wmaticHarvested;
@@ -75,7 +79,7 @@ contract VaultSushiFlipToFlip is VaultController, IStrategy {
 
     /* ========== MODIFIER ========== */
 
-    modifier updateSushiHarvested {
+    modifier updateSushiHarvested() {
         uint _before = SUSHI.balanceOf(address(this));
         uint _beforeWmatic = WMATIC.balanceOf(address(this));
         _;
@@ -89,11 +93,11 @@ contract VaultSushiFlipToFlip is VaultController, IStrategy {
 
     function initialize(uint _pid, address _token) external initializer {
         __VaultController_init(IBEP20(_token));
-        _stakingToken.safeApprove(address(SUSHI_MINI_CHEF), uint(- 1));
+        _stakingToken.safeApprove(address(SUSHI_MINI_CHEF), uint(-1));
         pid = _pid;
 
-        SUSHI.safeApprove(address(zap), uint(- 1));
-        WMATIC.safeApprove(address(zap), uint(- 1));
+        SUSHI.safeApprove(address(zap), uint(-1));
+        WMATIC.safeApprove(address(zap), uint(-1));
     }
 
     /* ========== VIEW FUNCTIONS ========== */
@@ -103,11 +107,11 @@ contract VaultSushiFlipToFlip is VaultController, IStrategy {
     }
 
     function balance() public view override returns (uint amount) {
-        (amount,) = SUSHI_MINI_CHEF.userInfo(pid, address(this));
+        (amount, ) = SUSHI_MINI_CHEF.userInfo(pid, address(this));
         amount = Math.min(amount, totalBalance);
     }
 
-    function balanceOf(address account) public view override returns(uint) {
+    function balanceOf(address account) public view override returns (uint) {
         if (totalShares == 0) return 0;
         return balance().mul(sharesOf(account)).div(totalShares);
     }
@@ -140,7 +144,7 @@ contract VaultSushiFlipToFlip is VaultController, IStrategy {
         return address(_stakingToken);
     }
 
-    function priceShare() external view override returns(uint) {
+    function priceShare() external view override returns (uint) {
         if (totalShares == 0) return 1e18;
         return balance().mul(1e18).div(totalShares);
     }
@@ -200,19 +204,8 @@ contract VaultSushiFlipToFlip is VaultController, IStrategy {
         wmaticHarvested = 0;
     }
 
-    function _harvest() private updateSushiHarvested {
-        SUSHI_MINI_CHEF.harvest(pid, address(this));
-    }
-
-    function withdraw(uint shares) external override onlyWhitelisted {
-        uint amount = balance().mul(shares).div(totalShares);
-        totalBalance = totalBalance.sub(amount);
-        totalShares = totalShares.sub(shares);
-        _shares[msg.sender] = _shares[msg.sender].sub(shares);
-
-        amount = _withdrawTokenWithCorrection(amount);
-        _stakingToken.safeTransfer(msg.sender, amount);
-        emit Withdrawn(msg.sender, amount, 0);
+    function withdraw(uint) external override onlyWhitelisted {
+        revert("N/A");
     }
 
     // @dev underlying only + withdrawal fee + no perf fee
@@ -289,6 +282,10 @@ contract VaultSushiFlipToFlip is VaultController, IStrategy {
         return _stakingToken.balanceOf(address(this)).sub(before);
     }
 
+    function _harvest() private updateSushiHarvested {
+        SUSHI_MINI_CHEF.harvest(pid, address(this));
+    }
+
     function _cleanupIfDustShares() private {
         uint shares = _shares[msg.sender];
         if (shares > 0 && shares < DUST) {
@@ -303,11 +300,11 @@ contract VaultSushiFlipToFlip is VaultController, IStrategy {
     function recoverToken(address token, uint amount) external override onlyOwner {
         if (token == address(SUSHI)) {
             uint sushiBalance = SUSHI.balanceOf(address(this));
-            require(amount <= sushiBalance.sub(sushiHarvested), "VaultFlipToFlip: cannot recover lp's harvested sushi");
+            require(amount <= sushiBalance.sub(sushiHarvested), "VaultSushiFlipToFlip: cannot recover lp's harvested sushi");
         }
-        if (token == address(WMATIC)){
+        if (token == address(WMATIC)) {
             uint wmaticBalance = WMATIC.balanceOf(address(this));
-            require(amount <= wmaticBalance.sub(wmaticHarvested));
+            require(amount <= wmaticBalance.sub(wmaticHarvested), "VaultSushiFlipToFlip: cannot recover lp's harvested wmatic");
         }
 
         IBEP20(token).safeTransfer(owner(), amount);
@@ -316,8 +313,7 @@ contract VaultSushiFlipToFlip is VaultController, IStrategy {
 
     function setTotalBalance() external onlyOwner {
         require(totalBalance == 0, "VaultSushiFlipToFlip: can't update totalBalance");
-        (uint amount,) = SUSHI_MINI_CHEF.userInfo(pid, address(this));
+        (uint amount, ) = SUSHI_MINI_CHEF.userInfo(pid, address(this));
         totalBalance = amount;
     }
-
 }
