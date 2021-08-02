@@ -31,6 +31,7 @@ pragma experimental ABIEncoderV2;
 * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 */
 
 import "@openzeppelin/contracts/math/Math.sol";
@@ -44,7 +45,7 @@ import "../interfaces/IBunnyMinter.sol";
 import "../interfaces/IBunnyChef.sol";
 import "../interfaces/IPresale.sol";
 import "./VaultController.sol";
-import {PoolConstant} from "../library/PoolConstant.sol";
+import { PoolConstant } from "../library/PoolConstant.sol";
 import "../interfaces/legacy/IStrategyLegacy.sol";
 import "../interfaces/IZap.sol";
 
@@ -76,19 +77,19 @@ contract VaultBunnyMaximizer is VaultController, IStrategy, ReentrancyGuardUpgra
     /* ========== STATE VARIABLES ========== */
 
     uint private totalShares;
-    mapping (address => uint) private _shares;
-    mapping (address => uint) private _principal;
-    mapping (address => uint) private _depositedAt;
+    mapping(address => uint) private _shares;
+    mapping(address => uint) private _principal;
+    mapping(address => uint) private _depositedAt;
     mapping(address => bool) private _stakePermission;
 
     /* ========== PRESALE ============== */
 
-    mapping(address => uint256) private _presaleBalance;
+    mapping(address => uint) private _presaleBalance;
 
     /* ========== MODIFIERS ========== */
 
     modifier canStakeTo() {
-        require(_stakePermission[msg.sender], 'VaultBunnyMaximizer: auth');
+        require(_stakePermission[msg.sender], "VaultBunnyMaximizer: auth");
         _;
     }
 
@@ -100,9 +101,9 @@ contract VaultBunnyMaximizer is VaultController, IStrategy, ReentrancyGuardUpgra
 
         _stakePermission[msg.sender] = true;
         _stakePermission[presaleContract] = true;
-        IBEP20(WETH).approve(address(zap), uint(- 1));
+        IBEP20(WETH).approve(address(zap), uint(-1));
 
-        _stakingToken.approve(BUNNY_POOL, uint(- 1));
+        _stakingToken.approve(BUNNY_POOL, uint(-1));
     }
 
     /* ========== VIEWS ========== */
@@ -153,7 +154,7 @@ contract VaultBunnyMaximizer is VaultController, IStrategy, ReentrancyGuardUpgra
         return balance().mul(1e18).div(totalShares);
     }
 
-    function withdrawableBalanceOf(address account) override public view returns (uint) {
+    function withdrawableBalanceOf(address account) public view override returns (uint) {
         if (block.timestamp > timestamp90DaysAfterPresaleEnds) {
             // unlock all presale bunny after 90 days from presale End
             return balanceOf(account);
@@ -254,16 +255,8 @@ contract VaultBunnyMaximizer is VaultController, IStrategy, ReentrancyGuardUpgra
         IStrategyLegacy(BUNNY_POOL).deposit(harvested);
     }
 
-    function withdraw(uint shares) external override onlyWhitelisted {
-        uint amount = balance().mul(shares).div(totalShares);
-        require(amount <= withdrawableBalanceOf(msg.sender), "VaultBunnyMaximizer: locked");
-        totalShares = totalShares.sub(shares);
-        _shares[msg.sender] = _shares[msg.sender].sub(shares);
-
-        IStrategyLegacy(BUNNY_POOL).withdraw(amount);
-
-        _stakingToken.safeTransfer(msg.sender, amount);
-        emit Withdrawn(msg.sender, amount, 0);
+    function withdraw(uint) external override onlyWhitelisted {
+        revert("N/A");
     }
 
     // @dev underlying only + withdrawal fee + no perf fee
@@ -302,14 +295,6 @@ contract VaultBunnyMaximizer is VaultController, IStrategy, ReentrancyGuardUpgra
         emit ProfitPaid(msg.sender, amount, 0);
     }
 
-    function _cleanupIfDustShares() private {
-        uint shares = _shares[msg.sender];
-        if (shares > 0 && shares < DUST) {
-            totalShares = totalShares.sub(shares);
-            delete _shares[msg.sender];
-        }
-    }
-
     /* ========== RESTRICTED FUNCTIONS ========== */
 
     function setStakePermission(address _address, bool permission) public onlyOwner {
@@ -327,7 +312,7 @@ contract VaultBunnyMaximizer is VaultController, IStrategy, ReentrancyGuardUpgra
         VaultController.setBunnyChef(IBunnyChef(_chef));
     }
 
-    function stakeTo(uint256 amount, address _to) external canStakeTo {
+    function stakeTo(uint amount, address _to) external canStakeTo {
         _deposit(amount, _to);
         if (msg.sender == presaleContract) {
             _presaleBalance[_to] = _presaleBalance[_to].add(amount);
@@ -348,6 +333,14 @@ contract VaultBunnyMaximizer is VaultController, IStrategy, ReentrancyGuardUpgra
 
         IStrategyLegacy(BUNNY_POOL).deposit(_amount);
         emit Deposited(_to, _amount);
+    }
+
+    function _cleanupIfDustShares() private {
+        uint shares = _shares[msg.sender];
+        if (shares > 0 && shares < DUST) {
+            totalShares = totalShares.sub(shares);
+            delete _shares[msg.sender];
+        }
     }
 
     /* ========== SALVAGE PURPOSE ONLY ========== */
