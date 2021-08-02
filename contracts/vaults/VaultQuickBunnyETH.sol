@@ -31,12 +31,13 @@ pragma experimental ABIEncoderV2;
 * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 */
 
 import "@pancakeswap/pancake-swap-lib/contracts/token/BEP20/SafeBEP20.sol";
 import "@openzeppelin/contracts/math/Math.sol";
 
-import {PoolConstant} from "../library/PoolConstant.sol";
+import { PoolConstant } from "../library/PoolConstant.sol";
 import "../interfaces/IPancakePair.sol";
 import "../interfaces/IPancakeFactory.sol";
 import "../interfaces/IStrategy.sol";
@@ -50,13 +51,13 @@ import "./VaultController.sol";
 
 contract VaultQuickBunnyETH is VaultController, IStrategy {
     using SafeBEP20 for IBEP20;
-    using SafeMath for uint256;
+    using SafeMath for uint;
 
     /* ========== CONSTANTS ============= */
 
-    address private constant BUNNY = 0x4C16f69302CcB511c5Fac682c7626B9eF0Dc126a;      // BUNNY
-    address private constant ETH = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;      // ETH
-    address private constant BUNNY_ETH = 0x62052b489Cb5bC72a9DC8EEAE4B24FD50639921a;    // QUICK Swap
+    address private constant BUNNY = 0x4C16f69302CcB511c5Fac682c7626B9eF0Dc126a; // BUNNY
+    address private constant ETH = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619; // ETH
+    address private constant BUNNY_ETH = 0x62052b489Cb5bC72a9DC8EEAE4B24FD50639921a; // QUICK Swap
     address private constant presaleContract = 0x172B554118ecd915C5F046819cA225351566566E;
 
     IBEP20 private constant QUICK = IBEP20(0x831753DD7087CaC61aB5644b308642cc1c33Dc13);
@@ -71,17 +72,17 @@ contract VaultQuickBunnyETH is VaultController, IStrategy {
 
     uint public totalShares;
     uint public totalBalance;
-    mapping (address => uint) private _shares;
-    mapping (address => uint) private _principal;
-    mapping (address => uint) private _depositedAt;
+    mapping(address => uint) private _shares;
+    mapping(address => uint) private _principal;
+    mapping(address => uint) private _depositedAt;
 
     IQuickStakingRewards private qVault;
 
-    uint public override pid;    // unused
+    uint public override pid; // unused
 
     /* ========== PRESALE ============== */
 
-    mapping(address => uint256) private _presaleBalance;
+    mapping(address => uint) private _presaleBalance;
 
     /* ========== EVENTS ========== */
 
@@ -93,8 +94,7 @@ contract VaultQuickBunnyETH is VaultController, IStrategy {
     function initialize() external initializer {
         __VaultController_init(IBEP20(BUNNY_ETH));
 
-        QUICK.safeApprove(address(zap), uint(- 1));
-
+        QUICK.safeApprove(address(zap), uint(-1));
     }
 
     /* ========== RESTRICTED FUNCTIONS ========== */
@@ -118,7 +118,7 @@ contract VaultQuickBunnyETH is VaultController, IStrategy {
     function setQuickVault(address _qVault) public onlyOwner {
         require(address(qVault) == address(0), "VaultBunnyETH: qVault already set");
         qVault = IQuickStakingRewards(_qVault);
-        _stakingToken.safeApprove(_qVault, uint(- 1));
+        _stakingToken.safeApprove(_qVault, uint(-1));
 
         qVault.stake(totalBalance);
     }
@@ -137,7 +137,7 @@ contract VaultQuickBunnyETH is VaultController, IStrategy {
         }
     }
 
-    function balanceOf(address account) public view override returns(uint) {
+    function balanceOf(address account) public view override returns (uint) {
         if (totalShares == 0) return 0;
         return balance().mul(sharesOf(account)).div(totalShares);
     }
@@ -219,7 +219,7 @@ contract VaultQuickBunnyETH is VaultController, IStrategy {
         return address(_stakingToken);
     }
 
-    function priceShare() external view override returns(uint) {
+    function priceShare() external view override returns (uint) {
         if (totalShares == 0) return 1e18;
         return balance().mul(1e18).div(totalShares);
     }
@@ -289,31 +289,8 @@ contract VaultQuickBunnyETH is VaultController, IStrategy {
         emit Harvested(harvested);
     }
 
-    function _harvest() private returns(uint) {
-        if (address(qVault) == address(0)) {
-            return 0;
-        } else {
-            uint before = QUICK.balanceOf(address(this));
-            qVault.getReward();
-            return QUICK.balanceOf(address(this)).sub(before);
-        }
-    }
-
-    function withdraw(uint shares) external override onlyWhitelisted {
-        uint amount = balance().mul(shares).div(totalShares);
-        require(amount <= withdrawableBalanceOf(msg.sender), "VaultBunnyETH: locked");
-        _bunnyChef.notifyWithdrawn(msg.sender, shares);
-        totalShares = totalShares.sub(shares);
-        _shares[msg.sender] = _shares[msg.sender].sub(shares);
-
-        amount = _withdrawTokenWithCorrection(amount);
-
-        if (address(qVault) == address(0)) {
-            totalBalance = totalBalance.sub(amount);
-        }
-
-        _stakingToken.safeTransfer(msg.sender, amount);
-        emit Withdrawn(msg.sender, amount, 0);
+    function withdraw(uint) external override onlyWhitelisted {
+        revert("N/A");
     }
 
     // @dev underlying only + withdrawal fee + no perf fee
@@ -335,7 +312,7 @@ contract VaultQuickBunnyETH is VaultController, IStrategy {
         uint depositTimestamp = _depositedAt[msg.sender];
         uint withdrawalFee = canMint() ? _minter.withdrawalFee(amount, depositTimestamp) : 0;
 
-        if (canMint()){
+        if (canMint()) {
             if (withdrawalFee > DUST) {
                 _minter.mintForV2(address(_stakingToken), withdrawalFee, 0, msg.sender, depositTimestamp);
                 amount = amount.sub(withdrawalFee);
@@ -398,7 +375,7 @@ contract VaultQuickBunnyETH is VaultController, IStrategy {
         _principal[_to] = _principal[_to].add(_amount);
         _depositedAt[_to] = block.timestamp;
 
-        if (address(qVault) != address(0)){
+        if (address(qVault) != address(0)) {
             qVault.stake(_amount);
         } else {
             totalBalance = totalBalance.add(_amount);
@@ -410,12 +387,22 @@ contract VaultQuickBunnyETH is VaultController, IStrategy {
     function _withdrawTokenWithCorrection(uint amount) private returns (uint) {
         if (amount == 0) return 0;
 
-        if (address(qVault) == address(0)){
+        if (address(qVault) == address(0)) {
             return amount;
         } else {
             uint before = _stakingToken.balanceOf(address(this));
             qVault.withdraw(amount);
             return _stakingToken.balanceOf(address(this)).sub(before);
+        }
+    }
+
+    function _harvest() private returns (uint) {
+        if (address(qVault) == address(0)) {
+            return 0;
+        } else {
+            uint before = QUICK.balanceOf(address(this));
+            qVault.getReward();
+            return QUICK.balanceOf(address(this)).sub(before);
         }
     }
 
