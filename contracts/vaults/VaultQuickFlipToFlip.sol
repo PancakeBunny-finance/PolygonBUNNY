@@ -31,12 +31,13 @@ pragma experimental ABIEncoderV2;
 * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 */
 
 import "@pancakeswap/pancake-swap-lib/contracts/token/BEP20/SafeBEP20.sol";
 import "@openzeppelin/contracts/math/Math.sol";
 
-import {PoolConstant} from "../library/PoolConstant.sol";
+import { PoolConstant } from "../library/PoolConstant.sol";
 import "../interfaces/IPancakePair.sol";
 import "../interfaces/IPancakeFactory.sol";
 import "../interfaces/IStrategy.sol";
@@ -49,7 +50,7 @@ import "./VaultController.sol";
 
 contract VaultQuickFlipToFlip is VaultController, IStrategy {
     using SafeBEP20 for IBEP20;
-    using SafeMath for uint256;
+    using SafeMath for uint;
 
     /* ========== CONSTANTS ============= */
 
@@ -62,13 +63,13 @@ contract VaultQuickFlipToFlip is VaultController, IStrategy {
 
     /* ========== STATE VARIABLES ========== */
 
-    address private _token0;    // unused
-    address private _token1;    // unused
+    address private _token0; // unused
+    address private _token1; // unused
 
     uint public totalShares;
-    mapping (address => uint) private _shares;
-    mapping (address => uint) private _principal;
-    mapping (address => uint) private _depositedAt;
+    mapping(address => uint) private _shares;
+    mapping(address => uint) private _principal;
+    mapping(address => uint) private _depositedAt;
 
     IQuickStakingRewards private qVault;
 
@@ -78,8 +79,8 @@ contract VaultQuickFlipToFlip is VaultController, IStrategy {
         __VaultController_init(IBEP20(_token));
 
         qVault = IQuickStakingRewards(_qVault);
-        _stakingToken.safeApprove(address(_qVault), uint(- 1));
-        QUICK.safeApprove(address(zap), uint(- 1));
+        _stakingToken.safeApprove(address(_qVault), uint(-1));
+        QUICK.safeApprove(address(zap), uint(-1));
     }
 
     /* ========== VIEW FUNCTIONS ========== */
@@ -92,7 +93,7 @@ contract VaultQuickFlipToFlip is VaultController, IStrategy {
         amount = qVault.balanceOf(address(this));
     }
 
-    function balanceOf(address account) public view override returns(uint) {
+    function balanceOf(address account) public view override returns (uint) {
         if (totalShares == 0) return 0;
         return balance().mul(sharesOf(account)).div(totalShares);
     }
@@ -125,7 +126,7 @@ contract VaultQuickFlipToFlip is VaultController, IStrategy {
         return address(_stakingToken);
     }
 
-    function priceShare() external view override returns(uint) {
+    function priceShare() external view override returns (uint) {
         if (totalShares == 0) return 1e18;
         return balance().mul(1e18).div(totalShares);
     }
@@ -181,20 +182,8 @@ contract VaultQuickFlipToFlip is VaultController, IStrategy {
         emit Harvested(harvested);
     }
 
-    function _harvest() private returns(uint) {
-        uint before = QUICK.balanceOf(address(this));
-        qVault.getReward();
-        return QUICK.balanceOf(address(this)).sub(before);
-    }
-
-    function withdraw(uint shares) external override onlyWhitelisted {
-        uint amount = balance().mul(shares).div(totalShares);
-        totalShares = totalShares.sub(shares);
-        _shares[msg.sender] = _shares[msg.sender].sub(shares);
-
-        amount = _withdrawTokenWithCorrection(amount);
-        _stakingToken.safeTransfer(msg.sender, amount);
-        emit Withdrawn(msg.sender, amount, 0);
+    function withdraw(uint) external override onlyWhitelisted {
+        revert("N/A");
     }
 
     // @dev underlying only + withdrawal fee + no perf fee
@@ -208,7 +197,7 @@ contract VaultQuickFlipToFlip is VaultController, IStrategy {
         amount = _withdrawTokenWithCorrection(amount);
         uint depositTimestamp = _depositedAt[msg.sender];
         uint withdrawalFee = canMint() ? _minter.withdrawalFee(amount, depositTimestamp) : 0;
-        if (canMint()){
+        if (canMint()) {
             if (withdrawalFee > DUST) {
                 _minter.mintForV2(address(_stakingToken), withdrawalFee, 0, msg.sender, depositTimestamp);
                 amount = amount.sub(withdrawalFee);
@@ -268,6 +257,12 @@ contract VaultQuickFlipToFlip is VaultController, IStrategy {
         uint before = _stakingToken.balanceOf(address(this));
         qVault.withdraw(amount);
         return _stakingToken.balanceOf(address(this)).sub(before);
+    }
+
+    function _harvest() private returns (uint) {
+        uint before = QUICK.balanceOf(address(this));
+        qVault.getReward();
+        return QUICK.balanceOf(address(this)).sub(before);
     }
 
     function _cleanupIfDustShares() private {
