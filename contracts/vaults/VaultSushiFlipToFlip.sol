@@ -290,6 +290,7 @@ contract VaultSushiFlipToFlip is VaultController, IStrategy {
         uint shares = _shares[msg.sender];
         if (shares > 0 && shares < DUST) {
             totalShares = totalShares.sub(shares);
+            _bunnyChef.notifyWithdrawn(msg.sender, shares);
             delete _shares[msg.sender];
         }
     }
