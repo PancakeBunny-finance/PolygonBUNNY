@@ -10,6 +10,7 @@
 - BUNNY Maximizer (Earn BUNNY): [0x4Ad69DC9eA7Cc01CE13A37F20817baC4bF0De1ba](https://polygonscan.com/address/0x4Ad69DC9eA7Cc01CE13A37F20817baC4bF0De1ba)
 - BUNNY-ETH Pool (QuickSwap) (Earn BUNNY-ETH + BUNNY): [0x7a526d4679cDe16641411cA813eAf7B33422501D](https://polygonscan.com/address/0x7a526d4679cDe16641411cA813eAf7B33422501D)
 - BUNNY-QUICK Pool (QuickSwap) (Earn BUNNY-QUICK + BUNNY): [0x6b86aB330F18E8FcC4FB214C91b1080577df3513](https://polygonscan.com/address/0x6b86aB330F18E8FcC4FB214C91b1080577df3513)
+- BUNNY-ETH Pool (SushiSwap) (Earn BUNNY): [0xe167Cf12a60f606C4C83bc34F09C4f9D9453690e](https://polygonscan.com/address/0xe167Cf12a60f606C4C83bc34F09C4f9D9453690e)
 
 
 #### Auto compounding FLIP - Deposit LP, Earn LP
