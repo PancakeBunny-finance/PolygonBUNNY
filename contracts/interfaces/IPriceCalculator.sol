@@ -42,6 +42,5 @@ interface IPriceCalculator {
     function priceOfMATIC() view external returns (uint);
     function priceOfBunny() view external returns (uint);
     function priceOfETH() view external returns (uint);
-    function pricesInUSD(address[] memory assets) external view returns (uint[] memory);
     function valueOfAsset(address asset, uint amount) external view returns (uint valueInBNB, uint valueInUSD);
 }
