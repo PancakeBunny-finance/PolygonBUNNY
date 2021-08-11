@@ -133,15 +133,6 @@ contract PriceCalculator is IPriceCalculator, OwnableUpgradeable {
         return uint(price).mul(1e10);
     }
 
-    function pricesInUSD(address[] memory assets) public view override returns (uint[] memory) {
-        uint[] memory prices = new uint[](assets.length);
-        for (uint i = 0; i < assets.length; i++) {
-            (, uint valueInUSD) = valueOfAsset(assets[i], 1e18);
-            prices[i] = valueInUSD;
-        }
-        return prices;
-    }
-
     function valueOfAsset(address asset, uint amount) public view override returns (uint valueInETH, uint valueInUSD) {
         if (amount == 0) {
             return (0, 0);
