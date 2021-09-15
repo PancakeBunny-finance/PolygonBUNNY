@@ -30,14 +30,15 @@ pragma solidity ^0.6.12;
 * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 */
 
 import "@pancakeswap/pancake-swap-lib/contracts/math/SafeMath.sol";
 import "@pancakeswap/pancake-swap-lib/contracts/token/BEP20/SafeBEP20.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-import {IUniswapV2Pair  as ISushiswapV2Pair} from"../interfaces/IUniswapV2Pair.sol";
-import {IUniswapV2Router02  as ISushiswapV2Router02} from "../interfaces/IUniswapV2Router02.sol";
+import { IUniswapV2Pair as ISushiswapV2Pair } from "../interfaces/IUniswapV2Pair.sol";
+import { IUniswapV2Router02 as ISushiswapV2Router02 } from "../interfaces/IUniswapV2Router02.sol";
 import "../interfaces/IZap.sol";
 import "../interfaces/IWMATIC.sol";
 
@@ -46,7 +47,7 @@ contract ZapSushi is IZap, OwnableUpgradeable {
     using SafeBEP20 for IBEP20;
 
     /* ========== CONSTANT VARIABLES ========== */
-
+    address private constant BUNNY = 0x4C16f69302CcB511c5Fac682c7626B9eF0Dc126a;
     address private constant WMATIC = 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270;
 
     address private constant DAI = 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063;
@@ -86,7 +87,7 @@ contract ZapSushi is IZap, OwnableUpgradeable {
         setNotFlip(IBBTC);
         setNotFlip(LINK);
         setNotFlip(FRAX);
-
+        setNotFlip(BUNNY);
 
         setRoutePairAddress(BTC, ETH);
         setRoutePairAddress(USDC, ETH);
@@ -96,10 +97,10 @@ contract ZapSushi is IZap, OwnableUpgradeable {
         setRoutePairAddress(SUSHI, ETH);
         setRoutePairAddress(IBBTC, BTC);
         setRoutePairAddress(FRAX, USDC);
+        setRoutePairAddress(BUNNY, ETH);
     }
 
     receive() external payable {}
-
 
     /* ========== View Functions ========== */
 
@@ -107,7 +108,7 @@ contract ZapSushi is IZap, OwnableUpgradeable {
         return !notFlip[_address];
     }
 
-    function covers(address _token) public override view returns (bool) {
+    function covers(address _token) public view override returns (bool) {
         return notFlip[_token];
     }
 
@@ -117,7 +118,11 @@ contract ZapSushi is IZap, OwnableUpgradeable {
 
     /* ========== External Functions ========== */
 
-    function zapInToken(address _from, uint amount, address _to) external override {
+    function zapInToken(
+        address _from,
+        uint amount,
+        address _to
+    ) external override {
         IBEP20(_from).safeTransferFrom(msg.sender, address(this), amount);
         _approveTokenIfNeeded(_from);
 
@@ -131,7 +136,17 @@ contract ZapSushi is IZap, OwnableUpgradeable {
                 _approveTokenIfNeeded(other);
                 uint sellAmount = amount.div(2);
                 uint otherAmount = _swap(_from, sellAmount, other, address(this));
-                ROUTER.addLiquidity(_from, other, amount.sub(sellAmount), otherAmount, 0, 0, msg.sender, block.timestamp);
+                pair.skim(address(this));
+                ROUTER.addLiquidity(
+                    _from,
+                    other,
+                    amount.sub(sellAmount),
+                    otherAmount,
+                    0,
+                    0,
+                    msg.sender,
+                    block.timestamp
+                );
             } else {
                 uint maticAmount;
                 if (_from == WMATIC) {
@@ -162,8 +177,20 @@ contract ZapSushi is IZap, OwnableUpgradeable {
             ISushiswapV2Pair pair = ISushiswapV2Pair(_from);
             address token0 = pair.token0();
             address token1 = pair.token1();
+
+            if (pair.balanceOf(_from) > 0) {
+                pair.burn(address(this));
+            }
+
             if (token0 == WMATIC || token1 == WMATIC) {
-                ROUTER.removeLiquidityETH(token0 != WMATIC ? token0 : token1, amount, 0, 0, msg.sender, block.timestamp);
+                ROUTER.removeLiquidityETH(
+                    token0 != WMATIC ? token0 : token1,
+                    amount,
+                    0,
+                    0,
+                    msg.sender,
+                    block.timestamp
+                );
             } else {
                 ROUTER.removeLiquidity(token0, token1, amount, 0, 0, msg.sender, block.timestamp);
             }
@@ -174,11 +201,15 @@ contract ZapSushi is IZap, OwnableUpgradeable {
 
     function _approveTokenIfNeeded(address token) private {
         if (IBEP20(token).allowance(address(this), address(ROUTER)) == 0) {
-            IBEP20(token).safeApprove(address(ROUTER), uint(- 1));
+            IBEP20(token).safeApprove(address(ROUTER), uint(-1));
         }
     }
 
-    function _swapMATICToFlip(address flip, uint amount, address receiver) private {
+    function _swapMATICToFlip(
+        address flip,
+        uint amount,
+        address receiver
+    ) private {
         if (!isFlip(flip)) {
             _swapMATICForToken(flip, amount, receiver);
         } else {
@@ -192,7 +223,15 @@ contract ZapSushi is IZap, OwnableUpgradeable {
                 uint tokenAmount = _swapMATICForToken(token, swapValue, address(this));
 
                 _approveTokenIfNeeded(token);
-                ROUTER.addLiquidityETH{value : amount.sub(swapValue)}(token, tokenAmount, 0, 0, receiver, block.timestamp);
+                pair.skim(address(this));
+                ROUTER.addLiquidityETH{ value: amount.sub(swapValue) }(
+                    token,
+                    tokenAmount,
+                    0,
+                    0,
+                    receiver,
+                    block.timestamp
+                );
             } else {
                 uint swapValue = amount.div(2);
                 uint token0Amount = _swapMATICForToken(token0, swapValue, address(this));
@@ -200,12 +239,17 @@ contract ZapSushi is IZap, OwnableUpgradeable {
 
                 _approveTokenIfNeeded(token0);
                 _approveTokenIfNeeded(token1);
+                pair.skim(address(this));
                 ROUTER.addLiquidity(token0, token1, token0Amount, token1Amount, 0, 0, receiver, block.timestamp);
             }
         }
     }
 
-    function _swapMATICForToken(address token, uint value, address receiver) private returns (uint) {
+    function _swapMATICForToken(
+        address token,
+        uint value,
+        address receiver
+    ) private returns (uint) {
         address[] memory path;
 
         if (routePairAddresses[token] != address(0)) {
@@ -219,11 +263,15 @@ contract ZapSushi is IZap, OwnableUpgradeable {
             path[1] = token;
         }
 
-        uint[] memory amounts = ROUTER.swapExactETHForTokens{value : value}(0, path, receiver, block.timestamp);
+        uint[] memory amounts = ROUTER.swapExactETHForTokens{ value: value }(0, path, receiver, block.timestamp);
         return amounts[amounts.length - 1];
     }
 
-    function _swapTokenForMATIC(address token, uint amount, address receiver) private returns (uint) {
+    function _swapTokenForMATIC(
+        address token,
+        uint amount,
+        address receiver
+    ) private returns (uint) {
         address[] memory path;
         if (routePairAddresses[token] != address(0)) {
             path = new address[](3);
@@ -240,7 +288,12 @@ contract ZapSushi is IZap, OwnableUpgradeable {
         return amounts[amounts.length - 1];
     }
 
-    function _swap(address _from, uint amount, address _to, address receiver) private returns (uint) {
+    function _swap(
+        address _from,
+        uint amount,
+        address _to,
+        address receiver
+    ) private returns (uint) {
         address intermediate = routePairAddresses[_from];
         if (intermediate == address(0)) {
             intermediate = routePairAddresses[_to];
@@ -264,7 +317,11 @@ contract ZapSushi is IZap, OwnableUpgradeable {
             path[0] = _from;
             path[1] = intermediate;
             path[2] = _to;
-        } else if (routePairAddresses[_from] != address(0) && routePairAddresses[_to] != address(0) && routePairAddresses[_from] != routePairAddresses[_to]) {
+        } else if (
+            routePairAddresses[_from] != address(0) &&
+            routePairAddresses[_to] != address(0) &&
+            routePairAddresses[_from] != routePairAddresses[_to]
+        ) {
             // routePairAddresses[xToken] = xRoute
             // [IBBTC, BTC, ETH, USDC, FRAX]
             path = new address[](5);
