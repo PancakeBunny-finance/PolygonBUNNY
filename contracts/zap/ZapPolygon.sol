@@ -30,6 +30,7 @@ pragma solidity ^0.6.12;
 * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 */
 
 import "@pancakeswap/pancake-swap-lib/contracts/math/SafeMath.sol";
@@ -57,7 +58,6 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
     address private constant BTC = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;
     address private constant ETH = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
     address private constant AAVE = 0xD6DF932A45C0f255f85145f286eA0b292B21C90B;
-
 
     IPancakeRouter02 private constant ROUTER = IPancakeRouter02(0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff);
 
@@ -93,7 +93,6 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
 
     receive() external payable {}
 
-
     /* ========== View Functions ========== */
 
     function isFlip(address _address) public view returns (bool) {
@@ -110,7 +109,11 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
 
     /* ========== External Functions ========== */
 
-    function zapInToken(address _from, uint amount, address _to) external override {
+    function zapInToken(
+        address _from,
+        uint amount,
+        address _to
+    ) external override {
         IBEP20(_from).safeTransferFrom(msg.sender, address(this), amount);
         _approveTokenIfNeeded(_from);
 
@@ -124,7 +127,17 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
                 _approveTokenIfNeeded(other);
                 uint sellAmount = amount.div(2);
                 uint otherAmount = _swap(_from, sellAmount, other, address(this));
-                ROUTER.addLiquidity(_from, other, amount.sub(sellAmount), otherAmount, 0, 0, msg.sender, block.timestamp);
+                pair.skim(address(this));
+                ROUTER.addLiquidity(
+                    _from,
+                    other,
+                    amount.sub(sellAmount),
+                    otherAmount,
+                    0,
+                    0,
+                    msg.sender,
+                    block.timestamp
+                );
             } else {
                 uint maticAmount;
                 if (_from == WMATIC) {
@@ -155,8 +168,20 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
             IPancakePair pair = IPancakePair(_from);
             address token0 = pair.token0();
             address token1 = pair.token1();
+
+            if (pair.balanceOf(_from) > 0) {
+                pair.burn(address(this));
+            }
+
             if (token0 == WMATIC || token1 == WMATIC) {
-                ROUTER.removeLiquidityETH(token0 != WMATIC ? token0 : token1, amount, 0, 0, msg.sender, block.timestamp);
+                ROUTER.removeLiquidityETH(
+                    token0 != WMATIC ? token0 : token1,
+                    amount,
+                    0,
+                    0,
+                    msg.sender,
+                    block.timestamp
+                );
             } else {
                 ROUTER.removeLiquidity(token0, token1, amount, 0, 0, msg.sender, block.timestamp);
             }
@@ -167,11 +192,15 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
 
     function _approveTokenIfNeeded(address token) private {
         if (IBEP20(token).allowance(address(this), address(ROUTER)) == 0) {
-            IBEP20(token).safeApprove(address(ROUTER), uint(- 1));
+            IBEP20(token).safeApprove(address(ROUTER), uint(-1));
         }
     }
 
-    function _swapMATICToFlip(address flip, uint amount, address receiver) private {
+    function _swapMATICToFlip(
+        address flip,
+        uint amount,
+        address receiver
+    ) private {
         if (!isFlip(flip)) {
             _swapMATICForToken(flip, amount, receiver);
         } else {
@@ -185,7 +214,15 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
                 uint tokenAmount = _swapMATICForToken(token, swapValue, address(this));
 
                 _approveTokenIfNeeded(token);
-                ROUTER.addLiquidityETH{value : amount.sub(swapValue)}(token, tokenAmount, 0, 0, receiver, block.timestamp);
+                pair.skim(address(this));
+                ROUTER.addLiquidityETH{ value: amount.sub(swapValue) }(
+                    token,
+                    tokenAmount,
+                    0,
+                    0,
+                    receiver,
+                    block.timestamp
+                );
             } else {
                 uint swapValue = amount.div(2);
                 uint token0Amount = _swapMATICForToken(token0, swapValue, address(this));
@@ -193,12 +230,17 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
 
                 _approveTokenIfNeeded(token0);
                 _approveTokenIfNeeded(token1);
+                pair.skim(address(this));
                 ROUTER.addLiquidity(token0, token1, token0Amount, token1Amount, 0, 0, receiver, block.timestamp);
             }
         }
     }
 
-    function _swapMATICForToken(address token, uint value, address receiver) private returns (uint) {
+    function _swapMATICForToken(
+        address token,
+        uint value,
+        address receiver
+    ) private returns (uint) {
         address[] memory path;
 
         if (routePairAddresses[token] != address(0)) {
@@ -212,11 +254,15 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
             path[1] = token;
         }
 
-        uint[] memory amounts = ROUTER.swapExactETHForTokens{value : value}(0, path, receiver, block.timestamp);
+        uint[] memory amounts = ROUTER.swapExactETHForTokens{ value: value }(0, path, receiver, block.timestamp);
         return amounts[amounts.length - 1];
     }
 
-    function _swapTokenForMATIC(address token, uint amount, address receiver) private returns (uint) {
+    function _swapTokenForMATIC(
+        address token,
+        uint amount,
+        address receiver
+    ) private returns (uint) {
         address[] memory path;
         if (routePairAddresses[token] != address(0)) {
             path = new address[](3);
@@ -232,7 +278,12 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
         return amounts[amounts.length - 1];
     }
 
-    function _swap(address _from, uint amount, address _to, address receiver) private returns (uint) {
+    function _swap(
+        address _from,
+        uint amount,
+        address _to,
+        address receiver
+    ) private returns (uint) {
         address intermediate = routePairAddresses[_from];
         if (intermediate == address(0)) {
             intermediate = routePairAddresses[_to];
@@ -256,7 +307,11 @@ contract ZapPolygon is IZap, OwnableUpgradeable {
             path[0] = _from;
             path[1] = intermediate;
             path[2] = _to;
-        } else if (routePairAddresses[_from] != address(0) && routePairAddresses[_to] != address(0) && routePairAddresses[_from] != routePairAddresses[_to]) {
+        } else if (
+            routePairAddresses[_from] != address(0) &&
+            routePairAddresses[_to] != address(0) &&
+            routePairAddresses[_from] != routePairAddresses[_to]
+        ) {
             // routePairAddresses[xToken] = xRoute
             // [X, BTC, ETH, USDC, Y]
             path = new address[](5);
